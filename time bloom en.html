@@ -1,0 +1,2144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Time Bloom</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:#1a2a1e; font-family:'Segoe UI','Hiragino Sans',sans-serif; touch-action:none; user-select:none; -webkit-user-select:none; }
+
+#game-container { width:100%; height:100%; display:flex; flex-direction:column; align-items:center; position:relative; overflow:hidden; background:linear-gradient(180deg,#1a2a1e 0%,#243a28 50%,#1a2a1e 100%); }
+
+/* HUD */
+#hud { width:100%; max-width:420px; padding:8px 16px; display:flex; justify-content:space-between; align-items:center; z-index:10; background:rgba(255,255,255,0.08); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border-radius:0 0 16px 16px; border:1px solid rgba(255,255,255,0.06); border-top:none; }
+#timer-box { text-align:left; }
+#timer-label { font-size:10px; color:rgba(168,240,160,0.6); letter-spacing:2px; text-transform:uppercase; font-weight:600; }
+#timer { font-size:34px; font-weight:800; color:#a8f0a0; font-variant-numeric:tabular-nums; text-shadow:0 0 12px rgba(168,240,160,0.3); }
+#timer.danger { color:#ff6b6b; text-shadow:0 0 12px rgba(255,100,100,0.4); animation: pulse-danger 0.5s infinite alternate; }
+@keyframes pulse-danger { to { opacity:0.5; } }
+
+#combo-box { text-align:center; }
+#combo { font-size:22px; font-weight:700; color:#ffd700; text-shadow:0 0 8px rgba(255,215,0,0.3); opacity:0; transition: opacity 0.3s; }
+#combo.active { opacity:1; animation: combo-pop 0.3s ease-out; }
+@keyframes combo-pop { 0%{transform:scale(1.5);} 100%{transform:scale(1);} }
+
+#score-box { text-align:right; }
+#score-label { font-size:10px; color:rgba(168,240,160,0.6); letter-spacing:2px; text-transform:uppercase; font-weight:600; }
+#score { font-size:36px; font-weight:900; color:#fff; font-variant-numeric:tabular-nums; text-shadow:0 0 12px rgba(255,255,255,0.15); }
+
+/* High score banner */
+#highscore-banner { position:fixed; top:18%; left:50%; transform:translateX(-50%); z-index:90; font-size:28px; font-weight:900; letter-spacing:2px; opacity:0; pointer-events:none; text-align:center; white-space:nowrap; }
+#highscore-banner.show { animation: hs-appear 2.5s ease-out forwards; }
+@keyframes hs-appear { 0%{opacity:0;transform:translateX(-50%) scale(0.5);} 15%{opacity:1;transform:translateX(-50%) scale(1.2);} 30%{transform:translateX(-50%) scale(1);} 80%{opacity:1;} 100%{opacity:0;transform:translateX(-50%) translateY(-30px);} }
+.rainbow-text { background:linear-gradient(90deg,#e91e63,#ff9800,#4caf50,#1565c0,#7c4dff,#e91e63); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; background-size:200% 100%; animation: rainbow-shift 1s linear infinite; }
+@keyframes rainbow-shift { to { background-position:-200% 0; } }
+
+/* Canvas */
+#game-canvas { display:block; touch-action:none; border-radius:10px; box-shadow:0 4px 24px rgba(0,0,0,0.3),0 0 1px rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.06); }
+
+/* Timer bar */
+#timer-bar-wrap { width:100%; max-width:420px; height:5px; background:rgba(255,255,255,0.06); border-radius:3px; margin-top:2px; overflow:hidden; }
+#timer-bar { height:100%; background:linear-gradient(90deg,#2e7d32,#66bb6a); border-radius:3px; transition:width 0.1s linear; width:100%; box-shadow:0 0 8px rgba(76,175,80,0.3); }
+
+/* Growth Legend */
+#legend { width:100%; max-width:420px; display:flex; justify-content:center; gap:14px; padding:3px 0; font-size:11px; color:rgba(255,255,255,0.85); }
+.legend-item { display:flex; align-items:center; gap:3px; }
+
+/* Overlays */
+.overlay { position:fixed; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:20px; padding-bottom:30px; z-index:100; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+#start-screen { background:radial-gradient(ellipse at 50% 20%,#1e3a2a 0%,#0d1f15 60%,#060d09 100%); }
+#start-screen .title-glow { position:absolute; top:8%; width:clamp(200px,60vw,380px); height:clamp(200px,60vw,380px); border-radius:50%; background:radial-gradient(circle,rgba(76,175,80,0.12) 0%,transparent 70%); animation:glow-p 4s ease-in-out infinite alternate; pointer-events:none; }
+@keyframes glow-p{0%{transform:scale(0.9);opacity:0.4;}100%{transform:scale(1.1);opacity:0.8;}}
+#start-screen h1 { font-size:clamp(44px,12vw,72px); font-weight:900; letter-spacing:-1px; background:linear-gradient(135deg,#a8f0a0,#ffffff,#ffd700,#a8f0a0); background-size:300% 300%; -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; animation:title-rainbow 5s linear infinite; margin-bottom:0; position:relative; z-index:2; }
+@keyframes title-rainbow{0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;}}
+#start-screen .subtitle { font-size:clamp(15px,4vw,20px); color:rgba(168,240,160,0.7); letter-spacing:6px; margin-bottom:12px; }
+#start-screen .title-flowers { font-size:clamp(24px,6vw,36px); margin-bottom:12px; animation:float-f 3s ease-in-out infinite alternate; }
+@keyframes float-f{0%{transform:translateY(0);}100%{transform:translateY(-6px);}}
+.overlay .final-score { font-size:60px; font-weight:700; color:#e65100; margin:10px 0; }
+.overlay .final-label { font-size:14px; color:#888; letter-spacing:2px; text-transform:uppercase; }
+.overlay button { margin-top:16px; padding:14px 48px; font-size:18px; font-weight:600; border:none; border-radius:30px; cursor:pointer; transition:transform 0.15s,box-shadow 0.15s; }
+.overlay button:active { transform:scale(0.95); }
+#start-btn { background:linear-gradient(135deg,#4caf50,#2e7d32); color:#fff; box-shadow:0 4px 24px rgba(76,175,80,0.4); font-size:20px; padding:16px 52px; }
+#restart-btn { background:linear-gradient(135deg,#4caf50,#2e7d32); color:#fff; box-shadow:0 4px 20px rgba(76,175,80,0.3); }
+#start-screen .how { max-width:340px; text-align:left; font-size:12px; color:rgba(255,255,255,0.55); line-height:1.7; margin-bottom:16px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:16px 18px; }
+#start-screen .how b { color:rgba(168,240,160,0.9); }
+#start-screen .how .section-title { font-size:14px; color:rgba(255,220,100,0.85); display:block; margin-bottom:4px; }
+#gameover-screen { background:rgba(10,20,14,0.94); backdrop-filter:blur(6px); }
+
+/* Score popup */
+.score-popup { position:absolute; pointer-events:none; font-weight:700; font-size:20px; color:#e65100; text-shadow:0 1px 3px rgba(0,0,0,0.15); z-index:50; animation:float-up 0.8s ease-out forwards; }
+@keyframes float-up { 0%{opacity:1;transform:translateY(0) scale(1);} 100%{opacity:0;transform:translateY(-60px) scale(1.3);} }
+
+/* Time bonus popup */
+.time-popup { position:absolute; pointer-events:none; font-weight:800; font-size:18px; color:#1565c0; text-shadow:0 1px 3px rgba(0,0,0,0.12); z-index:55; animation:float-up 1.2s ease-out forwards; white-space:nowrap; }
+
+/* Item & Rainbow effects */
+@keyframes screen-shake { 0%,100%{transform:translate(0,0);} 25%{transform:translate(-4px,2px);} 50%{transform:translate(3px,-3px);} 75%{transform:translate(-2px,3px);} }
+@keyframes frost-expand { 0%{transform:scale(0);opacity:0.8;} 50%{opacity:0.5;} 100%{transform:scale(1.8);opacity:0;} }
+@keyframes sweep-effect { 0%{left:-80px;opacity:0.7;} 100%{left:110%;opacity:0;} }
+@keyframes bolt-flash { 0%{opacity:1;} 20%{opacity:0;} 40%{opacity:0.7;} 60%{opacity:0;} 80%{opacity:0.5;} 100%{opacity:0;} }
+@keyframes vortex-spin { 0%{transform:translate(-50%,-50%) rotate(0deg) scale(1.2);opacity:0.8;} 100%{transform:translate(-50%,-50%) rotate(720deg) scale(0);opacity:0;} }
+@keyframes rainbow-wave { 0%{background-position:0% 50%;opacity:0.6;} 50%{opacity:0.4;} 100%{background-position:200% 50%;opacity:0;} }
+.screen-shake { animation: screen-shake 0.3s ease-in-out; }
+
+
+.frost-ring { position:absolute; border-radius:50%; border:3px solid rgba(33,150,243,0.6); pointer-events:none; z-index:40; animation:frost-expand 0.7s ease-out forwards; }
+.sweep-bar { position:absolute; top:0; width:80px; height:100%; background:linear-gradient(90deg,transparent,rgba(76,175,80,0.5),rgba(255,255,255,0.3),transparent); pointer-events:none; z-index:40; animation:sweep-effect 0.7s ease-in-out forwards; }
+.bolt-overlay { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,235,59,0.35); pointer-events:none; z-index:40; animation:bolt-flash 0.5s ease-out forwards; }
+.vortex-effect { position:absolute; font-size:70px; pointer-events:none; z-index:40; animation:vortex-spin 1s ease-in forwards; }
+.rainbow-row-flash { position:absolute; left:0; width:100%; pointer-events:none; z-index:40;
+  background:linear-gradient(90deg,#ff6b9d,#ffa726,#ffee58,#66bb6a,#42a5f5,#ab47bc,#ff6b9d); background-size:200% 100%;
+  animation:rainbow-wave 1s ease-out forwards; }
+
+/* Item UI */
+#item-bar { width:100%; max-width:420px; display:flex; justify-content:center; gap:8px; padding:4px 0; min-height:10px; }
+.item-inv-btn { padding:4px 12px 2px; font-size:24px; border:2px solid rgba(255,255,255,0.15); border-radius:12px; background:rgba(255,255,255,0.92); cursor:pointer; transition:all 0.15s; text-align:center; line-height:1; color:#333; }
+
+.item-inv-btn:active { transform:scale(0.93); }
+.item-inv-btn.active { border-color:#ff6b6b; background:rgba(255,100,100,0.15); box-shadow:0 0 12px rgba(255,100,100,0.3); }
+.item-inv-btn .item-count { display:block; font-size:11px; font-weight:700; color:#555; margin-top:0; line-height:1.2; }
+#item-select { position:fixed; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(10,20,14,0.92); backdrop-filter:blur(6px); z-index:110; }
+#item-select .item-title { font-size:20px; font-weight:700; color:#a8f0a0; margin-bottom:20px; }
+.item-choice-btn { padding:16px 18px; font-size:22px; border:2px solid rgba(168,240,160,0.3); border-radius:14px; background:rgba(255,255,255,0.06); color:#fff; cursor:pointer; text-align:center; line-height:1.3; transition:all 0.15s; min-width:90px; }
+.item-choice-btn:active { transform:scale(0.93); background:rgba(168,240,160,0.15); }
+.item-choice-btn small { display:block; font-size:11px; color:rgba(255,255,255,0.4); margin-top:4px; }
+#item-mode-hint { position:fixed; top:12%; left:50%; transform:translateX(-50%); z-index:60; font-size:16px; font-weight:700; color:#ff6b6b; background:rgba(10,20,14,0.85); backdrop-filter:blur(4px); padding:8px 20px; border-radius:20px; box-shadow:0 2px 16px rgba(0,0,0,0.3); border:1px solid rgba(255,100,100,0.2); display:none; }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <div id="hud">
+    <div id="timer-box"><div id="timer-label">TIME</div><div id="timer">60.0</div></div>
+    <div id="combo-box"><div id="combo"></div></div>
+    <div id="score-box"><div id="score-label">SCORE</div><div id="score">0</div></div>
+  </div>
+  <div id="timer-bar-wrap"><div id="timer-bar"></div></div>
+  <div id="growth-hud" style="width:100%;max-width:420px;padding:2px 14px;font-size:18px;font-weight:600;color:rgba(255,255,255,0.9);background:rgba(255,255,255,0.05);border-radius:8px;border:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;">
+    <span id="growth-wilted">🥀Wilted 0</span>
+    <span id="growth-speed">🌱Speed ×1.0</span>
+  </div>
+  <canvas id="game-canvas"></canvas>
+  <div id="legend">
+    <span class="legend-item"><canvas id="leg-sprout" width="20" height="20"></canvas> 10pt +1s</span>
+    <span class="legend-item"><canvas id="leg-leaf" width="20" height="20"></canvas> 30pt +2s</span>
+    <span class="legend-item"><canvas id="leg-flower" width="20" height="20"></canvas> 80pt +3s</span>
+    <span class="legend-item"><canvas id="leg-wilted" width="20" height="20"></canvas> Blocked</span>
+  </div>
+  <div id="highscore-banner"></div>
+  <div id="item-mode-hint"></div>
+
+  <!-- Item inventory bar -->
+  <div id="item-bar"></div>
+
+  <!-- Item selection overlay -->
+  <div id="item-select" style="display:none;">
+    <div class="item-title">⭐ Choose an Item</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+      <button class="item-choice-btn" id="pick-vacuum">🧹<br>Vacuum<small>Remove all wilted</small></button>
+      <button class="item-choice-btn" id="pick-ice">❄️<br>Ice<small>Freeze 4×4 60s</small></button>
+      <button class="item-choice-btn" id="pick-bomb">💣<br>Bomb<small>Destroy 2×2</small></button>
+      <button class="item-choice-btn" id="pick-vortex">🌀<br>Vortex<small>Rewind 10s</small></button>
+      <button class="item-choice-btn" id="pick-lightning">⚡<br>Lightning<small>Random 1-5 destroy</small></button>
+    </div>
+  </div>
+
+  <!-- Start Screen -->
+  <div class="overlay" id="start-screen">
+    <div class="title-glow"></div>
+    <h1>Time Bloom</h1>
+    <div class="subtitle">— Grow or Let Go? —</div>
+    <div class="title-flowers">🌱 🌿 🌸 🥀</div>
+    <div id="title-highscore" style="font-size:14px;color:#ffd700;margin-bottom:8px;"></div>
+    <div class="how">
+      <span class="section-title">🎮 How to Play</span>
+      Start with <b>60 seconds</b> on the clock (max 120s).<br>
+      Swipe to swap blocks. Match <b>3 or more of the same color</b> to clear them.<br>
+      Clearing blocks earns score and <b>recovers time</b>.<br>
+      <b>Combos</b> (chain reactions) multiply your time recovery!<br>
+      If no valid moves remain, it's <b>game over</b>.<br><br>
+
+      <span class="section-title">🌱 Growth System</span>
+      Blocks grow automatically over time:<br>
+      🌱<b>Sprout</b> (10pt +1s) → 🌿<b>Leaf</b> (30pt +2s) →<br>
+      🌸<b>Flower</b> (80pt +3s) → 🥀<b>Wilted</b> (obstacle -5s)<br>
+      Higher growth = bigger rewards and time recovery,<br>
+      but wilted flowers become <b>immovable obstacles</b> with a -5s penalty.<br>
+      If <b>3 wilted flowers line up</b> (horizontal/vertical), they auto-clear<br>
+      but cost <b>-200pts & -15s</b> penalty!<br>
+      ※Even with 4+ in a row, only the first 3 are cleared.<br><br>
+
+      <span class="section-title">⚠️ Speed Up (Rising Difficulty)</span>
+      Growth speed increases as the game progresses:<br>
+      ・Every <b>10</b> cumulative wilted flowers: +0.1× speed<br>
+      ・Every <b>90 seconds</b> of play: +0.1× speed<br>
+      ・Speed <b>never decreases</b> once raised<br>
+      Example: 20 wilted + 3min elapsed → ×1.4 speed<br><br>
+
+      <span class="section-title">⏱ Items</span>
+      Earn an item when the timer <b>exceeds 120 seconds</b>!<br>
+      <b>Time is paused</b> while using items.<br><br>
+      🧹<b>Vacuum</b> — <b>Remove all</b> wilted flowers instantly.<br>
+      ❄️<b>Ice</b> — Tap to <b>freeze a 4×4 area</b> for <b>60 seconds</b> (stops growth).<br>
+      💣<b>Bomb</b> — Tap to <b>destroy a 2×2 area</b>. No time bonus. Can't destroy wilted.<br>
+      🌀<b>Vortex</b> — <b>Rewind all growth by 10s</b>. Flower→Leaf→Sprout. Wilted stays wilted.<br>
+      ⚡<b>Lightning</b> — Destroy <b>1-5 random</b> blocks. Can hit wilted flowers too. It's a gamble!<br><br>
+
+      <span class="section-title">🌈 Rainbow Bonus Block</span>
+      A rare special block that appears occasionally.<br>
+      Acts as a <b>wildcard</b> — matches any color.<br>
+      When cleared, <b>wipes out 2 random rows</b> for a massive clear!
+    </div>
+    <button id="start-btn">🌱 Play</button>
+    <div style="margin-top:14px;font-size:11px;color:rgba(255,255,255,0.2);letter-spacing:2px;">Created by A.M.</div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div class="overlay" id="gameover-screen" style="display:none;">
+    <div id="gameover-reason" style="font-size:18px;color:#ff9800;margin-bottom:10px;font-weight:600;"></div>
+    <div class="final-label">SCORE</div>
+    <div class="final-score" id="final-score">0</div>
+    <div id="max-combo" style="color:rgba(168,240,160,0.5);font-size:14px;margin-top:4px;"></div>
+    <div id="highscore-display" style="font-size:16px;margin-top:8px;color:#ffd700;"></div>
+    <div style="display:flex;gap:12px;margin-top:20px;">
+      <button id="restart-btn">🌱 Retry</button>
+      <button id="to-title-btn" style="padding:14px 28px;border:2px solid rgba(255,255,255,0.2);border-radius:30px;background:rgba(255,255,255,0.08);font-size:16px;cursor:pointer;color:rgba(255,255,255,0.6);">Title</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== CONSTANTS =====
+const COLS = 7, ROWS = 8;
+const TYPES = 5;
+const CLOCK_CHANCE = 0; // disabled for now
+const GROWTH_TIMES = [10000, 10000, 30000]; // ms: sprout 10s, leaf 10s, flower 30s
+const TOTAL_GROWTH = GROWTH_TIMES.reduce((a,b)=>a+b,0); // 50s total
+const WILT_WARNING = 15000; // last 15s of flower stage
+const INITIAL_TIME = 60;
+const MAX_TIME = 120;
+const SWAP_DURATION = 150;
+const FALL_SPEED = 0.015; // cells per ms
+const MATCH_ANIM = 250;
+
+const TYPE_COLORS = [
+  ['#ff6b8a','#e91e63'], // Rose
+  ['#ffca28','#f9a825'], // Sunflower
+  ['#b388ff','#7c4dff'], // Violet
+  ['#64b5f6','#1565c0'], // Hydrangea (dark blue)
+  ['#69f0ae','#00c853'], // Clover
+];
+// 3-shade palette: [sprout(pale), leaf(mid), flower(vivid), center]
+const TYPE_PALETTE = [
+  ['#ffc1cc','#ff6b8a','#e91e63','#ad1457'], // Rose
+  ['#fff3b0','#ffca28','#f57f17','#e65100'], // Sunflower
+  ['#d7c0f0','#b388ff','#7c4dff','#4a148c'], // Violet
+  ['#7bafd4','#1565c0','#0d47a1','#082a6b'], // Hydrangea (dark blue)
+  ['#b9f6ca','#69f0ae','#00c853','#1b5e20'], // Clover
+];
+const CLOCK_COLORS = ['#ffd54f','#ff8f00'];
+
+const GROWTH_EMOJI = ['🌱','🌿','🌸','🥀'];
+const GROWTH_SCORES = [10, 30, 80, 0];
+const CLOCK_TIME_BONUS = [2, 4, 8, -10];
+
+const COMBO_MULTIPLIERS = {
+  3: 1.5,
+  5: 'freeze',
+  8: 'refresh',
+  10: 'timebonus'
+};
+
+// Time bonus per growth stage when cleared (halved)
+const GROWTH_TIME_BONUS = [1, 2, 3, 0];
+const RAINBOW_TYPE = 99;
+
+// ===== GAME STATE =====
+let canvas, ctx;
+let cellSize, boardX, boardY;
+let grid = [];
+let gameTime = INITIAL_TIME;
+let gameScore = 0;
+let comboCount = 0;
+let maxCombo = 0;
+let gameRunning = false;
+let lastTime = 0;
+let freezeTimer = 0;
+let highScore = 0;
+let highScoreBeaten = false;
+let elapsedTime = 0; // total time played in ms
+let maxGrowthMult = 1.0; // never decreases
+let totalWilted = 0; // cumulative wilted count, never resets
+
+// Items
+let inventory = [];
+let activeItem = null;
+let itemSelectPending = false;
+let activeItemIndex = -1;
+let itemPreviewCol = -1, itemPreviewRow = -1;
+let itemPreviewing = false;
+let rainbowChance = 0.005;
+let rainbowClearing = false;
+let speedUpPending = 0; // rare in normal mode
+
+// Input
+let touchStartX, touchStartY, touchStartCol, touchStartRow;
+let selectedCell = null;
+let swapping = false;
+let processing = false;
+
+// Particles
+let particles = [];
+
+// ===== BLOCK CLASS =====
+class Block {
+  constructor(type, col, row) {
+    this.type = type; // 0-4 plant, 5=clock
+    this.col = col;
+    this.row = row;
+    this.growth = 0; // 0=seed,1=sprout,2=bloom,3=wilted
+    this.growthTimer = 0;
+    this.x = col; // visual position (can differ during animation)
+    this.y = row;
+    this.scale = 1;
+    this.opacity = 1;
+    this.removing = false;
+    this.removeTimer = 0;
+    this.justPlaced = true;
+    this.placeTimer = 0;
+    this.frozenTimer = 0;
+    this.webTimer = 0; // spider web: can't be swapped
+  }
+  get isClock() { return this.type === TYPES; }
+  get isWilted() { return this.growth >= 3 && !this.isClock; }
+  get score() {
+    if(this.isClock) return 0;
+    return GROWTH_SCORES[this.growth] || 0;
+  }
+}
+
+// ===== INIT =====
+function init() {
+  canvas = document.getElementById('game-canvas');
+  ctx = canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize', resize);
+
+  canvas.addEventListener('touchstart', onTouchStart, {passive:false});
+  canvas.addEventListener('touchmove', onTouchMove, {passive:false});
+  canvas.addEventListener('touchend', onTouchEnd, {passive:false});
+  canvas.addEventListener('mousedown', onMouseDown);
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('mouseup', onMouseUp);
+
+  document.getElementById('start-btn').addEventListener('click', startGame);
+  document.getElementById('restart-btn').addEventListener('click', startGame);
+  document.getElementById('to-title-btn').addEventListener('click', goToTitle);
+  document.getElementById('pick-vacuum').addEventListener('click', ()=>selectItem('vacuum'));
+  document.getElementById('pick-ice').addEventListener('click', ()=>selectItem('ice'));
+  document.getElementById('pick-bomb').addEventListener('click', ()=>selectItem('bomb'));
+  document.getElementById('pick-vortex').addEventListener('click', ()=>selectItem('vortex'));
+  document.getElementById('pick-lightning').addEventListener('click', ()=>selectItem('lightning'));
+  renderLegend();
+}
+
+function goToTitle() {
+  document.getElementById('gameover-screen').style.display='none';
+  document.getElementById('start-screen').style.display='flex';
+  const titleHS = document.getElementById('title-highscore');
+  if(titleHS && highScore > 0) titleHS.textContent = '🏆 HIGH SCORE: ' + highScore.toLocaleString();
+}
+
+function resize() {
+  const container = document.getElementById('game-container');
+  const hud = document.getElementById('hud');
+  const timerBarWrap = document.getElementById('timer-bar-wrap');
+  const legend = document.getElementById('legend');
+  const itemBar = document.getElementById('item-bar');
+  const usedH = hud.offsetHeight + (timerBarWrap?timerBarWrap.offsetHeight:0) + legend.offsetHeight + (itemBar?itemBar.offsetHeight:0) + 50;
+  const availW = Math.min(container.clientWidth, 420);
+  const availH = container.clientHeight - usedH;
+  cellSize = Math.floor(Math.min(availW / COLS, availH / ROWS));
+  cellSize = Math.max(cellSize, 30); // minimum
+  canvas.width = cellSize * COLS;
+  canvas.height = cellSize * ROWS;
+  boardX = (container.clientWidth - canvas.width) / 2;
+  boardY = hud.offsetHeight;
+  canvas.style.marginTop = '2px';
+}
+
+// ===== GAME LIFECYCLE =====
+function startGame() {
+  initAudio();
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('gameover-screen').style.display = 'none';
+
+  gameTime = INITIAL_TIME;
+  gameScore = 0;
+  comboCount = 0;
+  maxCombo = 0;
+  freezeTimer = 0;
+  particles = [];
+  processing = false;
+  swapping = false;
+  selectedCell = null;
+  highScoreBeaten = false;
+  elapsedTime = 0;
+  maxGrowthMult = 1.0;
+  totalWilted = 0;
+  inventory = [];
+  activeItem = null;
+  activeItemIndex = -1;
+  itemSelectPending = false;
+  renderItemBar();
+  document.getElementById('item-mode-hint').style.display = 'none';
+  document.getElementById('item-select').style.display = 'none';
+  document.getElementById('highscore-banner').className = '';
+  document.getElementById('highscore-banner').textContent = '';
+
+  initBoard();
+  let safety = 0;
+  while((findMatches().length > 0 || !hasValidMoves()) && safety < 100) {
+    initBoard();
+    safety++;
+  }
+
+  gameRunning = true;
+  lastTime = performance.now();
+  updateHUD();
+  bgmNoteIndex = 0;
+  startBGM();
+  requestAnimationFrame(gameLoop);
+}
+
+function endGame(reason) {
+  gameRunning = false;
+  stopBGM();
+  document.getElementById('gameover-reason').textContent = reason || '';
+  document.getElementById('final-score').textContent = gameScore.toLocaleString();
+  document.getElementById('max-combo').textContent = `Max Combo: ${maxCombo}`;
+  const hsEl = document.getElementById('highscore-display');
+  if(gameScore > highScore) {
+    highScore = gameScore;
+    hsEl.innerHTML = '<span class="rainbow-text">🏆 NEW HIGH SCORE!</span>';
+  } else {
+    hsEl.textContent = `HIGH SCORE: ${highScore.toLocaleString()}`;
+  }
+  // Update title screen high score for next game
+  const titleHS = document.getElementById('title-highscore');
+  if(titleHS) titleHS.textContent = highScore > 0 ? `🏆 HIGH SCORE: ${highScore.toLocaleString()}` : '';
+  document.getElementById('gameover-screen').style.display = 'flex';
+}
+
+// ===== BOARD =====
+function initBoard() {
+  grid = [];
+  for(let c=0; c<COLS; c++) {
+    grid[c] = [];
+    for(let r=0; r<ROWS; r++) {
+      grid[c][r] = createBlock(c, r);
+    }
+  }
+}
+
+function createBlock(col, row) {
+  const isClock = Math.random() < CLOCK_CHANCE;
+  const isRainbow = (Math.random() < rainbowChance);
+  const type = isClock ? TYPES : (isRainbow ? RAINBOW_TYPE : Math.floor(Math.random() * TYPES));
+  const b = new Block(type, col, row);
+  return b;
+}
+
+// ===== MATCH DETECTION =====
+function blocksMatch(a, b) {
+  if(!a || !b || a.removing || b.removing) return false;
+  if(a.type === RAINBOW_TYPE || b.type === RAINBOW_TYPE) {
+    return !a.isWilted && !b.isWilted;
+  }
+  if(a.isWilted && b.isWilted) return true;
+  if(a.isWilted || b.isWilted) return false;
+  return a.type === b.type;
+}
+
+function findMatches() {
+  const matched = new Set();
+
+  // ── Normal + rainbow blocks (3+) ──
+  // Horizontal
+  for(let r=0; r<ROWS; r++) {
+    for(let c=0; c<COLS-2; c++) {
+      const a = grid[c][r], b = grid[c+1][r], cc = grid[c+2][r];
+      if(a && b && cc && !a.removing && !b.removing && !cc.removing
+        && !a.isWilted && !b.isWilted && !cc.isWilted) {
+        // Check type match (rainbow matches any)
+        const at = a.type===RAINBOW_TYPE?-1:a.type, bt = b.type===RAINBOW_TYPE?-1:b.type, ct = cc.type===RAINBOW_TYPE?-1:cc.type;
+        const realType = at>=0?at:(bt>=0?bt:ct);
+        if(realType>=0 && (at<0||at===realType) && (bt<0||bt===realType) && (ct<0||ct===realType)) {
+          matched.add(a); matched.add(b); matched.add(cc);
+        }
+      }
+    }
+  }
+  // Vertical
+  for(let c=0; c<COLS; c++) {
+    for(let r=0; r<ROWS-2; r++) {
+      const a = grid[c][r], b = grid[c][r+1], cc = grid[c][r+2];
+      if(a && b && cc && !a.removing && !b.removing && !cc.removing
+        && !a.isWilted && !b.isWilted && !cc.isWilted) {
+        const at = a.type===RAINBOW_TYPE?-1:a.type, bt = b.type===RAINBOW_TYPE?-1:b.type, ct = cc.type===RAINBOW_TYPE?-1:cc.type;
+        const realType = at>=0?at:(bt>=0?bt:ct);
+        if(realType>=0 && (at<0||at===realType) && (bt<0||bt===realType) && (ct<0||ct===realType)) {
+          matched.add(a); matched.add(b); matched.add(cc);
+        }
+      }
+    }
+  }
+
+  // ── Wilted blocks (exactly 3 only, even if 4+ are in a row) ──
+  // Horizontal
+  for(let r=0; r<ROWS; r++) {
+    let run = [];
+    for(let c=0; c<=COLS; c++) {
+      const b = c < COLS ? grid[c][r] : null;
+      if(b && b.isWilted && !b.removing) {
+        run.push(b);
+      } else {
+        if(run.length >= 3) { for(let i=0;i<3;i++) matched.add(run[i]); }
+        run = [];
+      }
+    }
+  }
+  // Vertical
+  for(let c=0; c<COLS; c++) {
+    let run = [];
+    for(let r=0; r<=ROWS; r++) {
+      const b = r < ROWS ? grid[c][r] : null;
+      if(b && b.isWilted && !b.removing) {
+        run.push(b);
+      } else {
+        if(run.length >= 3) { for(let i=0;i<3;i++) matched.add(run[i]); }
+        run = [];
+      }
+    }
+  }
+
+  return [...matched];
+}
+
+// ===== PROCESS MATCHES =====
+async function processMatches() {
+  if(processing) return;
+  processing = true;
+
+  let chainCombo = 0;
+  while(true) {
+    const matches = findMatches();
+    if(matches.length === 0) break;
+
+    chainCombo++;
+    comboCount++;
+    if(comboCount > maxCombo) maxCombo = comboCount;
+
+    // Sound effects
+    if(comboCount >= 2) playComboSound(comboCount);
+    else playMatchSound();
+
+    // Calculate score
+    let matchScore = 0;
+    let hasRainbow = false;
+    let hasWilted = false;
+    for(const b of matches) {
+      if(b.isWilted) hasWilted = true;
+      else if(b.type === RAINBOW_TYPE) hasRainbow = true;
+      else if(!b.isClock) {
+        matchScore += b.score;
+      }
+      b.removing = true;
+      b.removeTimer = MATCH_ANIM;
+      spawnParticles(b.col, b.row, b.type);
+    }
+
+    // Score combo multiplier
+    let scoreMult = 1;
+    if(comboCount >= 3) scoreMult = 1.5;
+    if(comboCount >= 5) scoreMult = 2;
+    if(comboCount >= 8) scoreMult = 3;
+    if(comboCount >= 10) scoreMult = 4;
+    matchScore = Math.floor(matchScore * scoreMult);
+
+    // Wilted match penalty: -200 points, -15 seconds
+    if(hasWilted) {
+      matchScore -= 200;
+      gameTime = Math.max(0, gameTime - 15);
+    }
+
+    gameScore += matchScore;
+
+    // Rainbow block: clear top half of board
+    if(hasRainbow) {
+      await delay(150);
+      triggerRainbowClear();
+    }
+
+    // Time bonus: per-block growth bonus + extra block bonus, × combo
+    let baseTimeBonus = 0;
+    for(const b of matches) {
+      baseTimeBonus += GROWTH_TIME_BONUS[b.growth] || 0;
+    }
+    if(matches.length > 3) {
+      baseTimeBonus += (matches.length - 3) * 1;
+    }
+    const timeBonus = baseTimeBonus * comboCount;
+
+    if(timeBonus > 0) {
+      const newTime = gameTime + timeBonus;
+      if(newTime > MAX_TIME && !itemSelectPending) {
+        gameTime = MAX_TIME;
+        itemSelectPending = true;
+        showTimePopupAt(timeBonus, matches);
+        // Will show item selection after processMatches completes
+      } else {
+        gameTime = Math.min(newTime, MAX_TIME);
+        showTimePopupAt(timeBonus, matches);
+      }
+    }
+
+    // Combo freeze at 5
+    if(comboCount === 5) {
+      freezeTimer = 1000;
+    }
+
+    showScorePopup(matchScore, matches);
+    updateHUD();
+
+    await delay(MATCH_ANIM);
+
+    for(const b of matches) {
+      grid[b.col][b.row] = null;
+    }
+
+    await applyGravity();
+    await fillBoard();
+    await delay(80);
+  }
+
+  comboCount = 0;
+  processing = false;
+
+  // Deadlock check
+  if(gameRunning && !hasValidMoves()) {
+    playDeadlockSound();
+    await delay(500);
+    endGame('🚫 No moves!');
+    return;
+  }
+
+  // Item selection if time overflowed (wait for animations)
+  if(itemSelectPending) {
+    if(rainbowClearing) return;
+    itemSelectPending = false;
+    await delay(1200);
+    if(gameRunning) showItemSelection();
+  }
+}
+
+function applyGravity() {
+  return new Promise(resolve => {
+    let maxDist = 0;
+    for(let c=0; c<COLS; c++) {
+      let empty = 0;
+      for(let r=ROWS-1; r>=0; r--) {
+        if(!grid[c][r]) {
+          empty++;
+        } else if(empty > 0) {
+          const b = grid[c][r];
+          grid[c][r] = null;
+          grid[c][r+empty] = b;
+          b.row = r + empty;
+          // Animate: y will interpolate in render
+          if(empty > maxDist) maxDist = empty;
+        }
+      }
+    }
+    setTimeout(resolve, Math.min(maxDist * 60, 300));
+  });
+}
+
+function fillBoard() {
+  return new Promise(resolve => {
+    let filled = false;
+    for(let c=0; c<COLS; c++) {
+      let emptyAbove = 0;
+      for(let r=0; r<ROWS; r++) {
+        if(!grid[c][r]) emptyAbove++;
+      }
+      for(let r=0; r<ROWS; r++) {
+        if(!grid[c][r]) {
+          const b = createBlock(c, r);
+          b.y = r - emptyAbove; // start above
+          grid[c][r] = b;
+          filled = true;
+        }
+      }
+    }
+    setTimeout(resolve, filled ? 200 : 0);
+  });
+}
+
+// ===== SWAP =====
+async function trySwap(c1,r1,c2,r2) {
+  if(swapping || processing) return;
+  if(c2<0||c2>=COLS||r2<0||r2>=ROWS) return;
+  const a = grid[c1][r1], b = grid[c2][r2];
+  if(!a || !b) return;
+  if(a.isWilted || b.isWilted) return;
+  if(a.webTimer > 0 || b.webTimer > 0) return;
+
+  swapping = true;
+
+  // Swap in grid
+  grid[c1][r1] = b; grid[c2][r2] = a;
+  b.col=c1; b.row=r1; a.col=c2; a.row=r2;
+
+  await delay(SWAP_DURATION);
+
+  // Check if valid
+  const matches = findMatches();
+  if(matches.length === 0) {
+    // Swap back
+    grid[c1][r1] = a; grid[c2][r2] = b;
+    a.col=c1; a.row=r1; b.col=c2; b.row=r2;
+    await delay(SWAP_DURATION);
+    swapping = false;
+    return;
+  }
+
+  swapping = false;
+  comboCount = 0;
+  processMatches();
+}
+
+// ===== INPUT =====
+let isDragging = false;
+
+function getCellFromPos(px, py) {
+  const rect = canvas.getBoundingClientRect();
+  const x = px - rect.left;
+  const y = py - rect.top;
+  const col = Math.floor(x / cellSize);
+  const row = Math.floor(y / cellSize);
+  if(col<0||col>=COLS||row<0||row>=ROWS) return null;
+  return {col, row};
+}
+
+function onTouchStart(e) {
+  e.preventDefault();
+  if(!gameRunning) return;
+  const t = e.touches[0];
+  if(activeItem) {
+    const cell = getCellFromPos(t.clientX, t.clientY);
+    if(cell) {
+      itemPreviewing = true;
+      itemPreviewCol = cell.col;
+      itemPreviewRow = cell.row;
+    }
+    return;
+  }
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
+  const cell = getCellFromPos(t.clientX, t.clientY);
+  if(cell) { touchStartCol = cell.col; touchStartRow = cell.row; }
+  isDragging = true;
+}
+function onTouchMove(e) {
+  e.preventDefault();
+  if(itemPreviewing && activeItem) {
+    const t = e.touches[0];
+    const cell = getCellFromPos(t.clientX, t.clientY);
+    if(cell) { itemPreviewCol = cell.col; itemPreviewRow = cell.row; }
+    return;
+  }
+  if(!isDragging || !gameRunning) return;
+  const t = e.touches[0];
+  const dx = t.clientX - touchStartX;
+  const dy = t.clientY - touchStartY;
+  const threshold = cellSize * 0.3;
+  if(Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+    isDragging = false;
+    let dc=0, dr=0;
+    if(Math.abs(dx) > Math.abs(dy)) dc = dx>0?1:-1;
+    else dr = dy>0?1:-1;
+    trySwap(touchStartCol, touchStartRow, touchStartCol+dc, touchStartRow+dr);
+  }
+}
+function onTouchEnd(e) {
+  e.preventDefault();
+  if(itemPreviewing && activeItem) {
+    itemPreviewing = false;
+    useItemAt(itemPreviewCol, itemPreviewRow);
+    itemPreviewCol = -1; itemPreviewRow = -1;
+    return;
+  }
+  isDragging = false;
+}
+
+function onMouseDown(e) {
+  if(!gameRunning) return;
+  if(activeItem) {
+    const cell = getCellFromPos(e.clientX, e.clientY);
+    if(cell) {
+      itemPreviewing = true;
+      itemPreviewCol = cell.col;
+      itemPreviewRow = cell.row;
+    }
+    return;
+  }
+  touchStartX = e.clientX; touchStartY = e.clientY;
+  const cell = getCellFromPos(e.clientX, e.clientY);
+  if(cell) { touchStartCol = cell.col; touchStartRow = cell.row; }
+  isDragging = true;
+}
+function onMouseMove(e) {
+  if(itemPreviewing && activeItem) {
+    const cell = getCellFromPos(e.clientX, e.clientY);
+    if(cell) { itemPreviewCol = cell.col; itemPreviewRow = cell.row; }
+    return;
+  }
+  if(!isDragging || !gameRunning) return;
+  const dx = e.clientX - touchStartX;
+  const dy = e.clientY - touchStartY;
+  const threshold = cellSize * 0.3;
+  if(Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+    isDragging = false;
+    let dc=0, dr=0;
+    if(Math.abs(dx) > Math.abs(dy)) dc = dx>0?1:-1;
+    else dr = dy>0?1:-1;
+    trySwap(touchStartCol, touchStartRow, touchStartCol+dc, touchStartRow+dr);
+  }
+}
+function onMouseUp() {
+  if(itemPreviewing && activeItem) {
+    itemPreviewing = false;
+    useItemAt(itemPreviewCol, itemPreviewRow);
+    itemPreviewCol = -1; itemPreviewRow = -1;
+    return;
+  }
+  isDragging = false;
+}
+
+// ===== GAME LOOP =====
+function gameLoop(ts) {
+  if(!gameRunning) return;
+  const dt = ts - lastTime;
+  lastTime = ts;
+
+  // Timer
+  if(!activeItem) {
+    elapsedTime += dt;
+    if(freezeTimer > 0) {
+      freezeTimer -= dt;
+    } else {
+      gameTime -= dt / 1000;
+    }
+  }
+  if(gameTime <= 0) {
+    gameTime = 0;
+    updateHUD();
+    endGame('⏰ Time up!');
+    return;
+  }
+
+  // Growth (paused during item mode)
+  if(!activeItem) {
+  for(let c=0; c<COLS; c++) {
+    for(let r=0; r<ROWS; r++) {
+      const b = grid[c][r];
+      if(!b || b.removing || b.growth >= 3 || b.type === RAINBOW_TYPE) continue;
+      // Tick frozen timer
+      if(b.frozenTimer > 0) { b.frozenTimer -= dt; continue; }
+      if(freezeTimer > 0) continue;
+      // Growth speed: never decreases, uses cumulative wilted count
+      const timeMult = Math.floor(elapsedTime / 90000) * 0.1;
+      const calcMult = 1.0 + Math.floor(totalWilted / 10) * 0.1 + timeMult;
+      if(calcMult > maxGrowthMult) {
+        maxGrowthMult = calcMult;
+      }
+      b.growthTimer += dt * maxGrowthMult;
+      const stageTime = GROWTH_TIMES[Math.min(b.growth, 2)];
+      if(b.growthTimer >= stageTime) {
+        b.growthTimer -= stageTime;
+        b.growth++;
+        if(b.growth <= 2) {
+          b.scale = 1.2;
+        }
+        if(b.growth >= 3) {
+          // Wilted penalty: -5 seconds
+          gameTime = Math.max(0, gameTime - 5);
+          showWiltPenalty(b.col, b.row);
+          totalWilted++;
+        }
+      }
+    }
+  }
+  } // end if(!activeItem) - growth pause
+
+  // Tick web timers on all blocks
+  for(let c=0;c<COLS;c++) for(let r=0;r<ROWS;r++) {
+    const b=grid[c][r]; if(b&&b.webTimer>0) b.webTimer-=dt;
+  }
+
+  // Periodic deadlock check (every 2 seconds)
+  if(!processing && !swapping && !activeItem) {
+    if(!this._deadlockTimer) this._deadlockTimer = 0;
+    this._deadlockTimer += dt;
+    if(this._deadlockTimer > 2000) {
+      this._deadlockTimer = 0;
+      if(!hasValidMoves()) {
+        playDeadlockSound();
+        endGame('🚫 No moves!');
+        return;
+      }
+    }
+  }
+
+  // Animate visual positions
+  for(let c=0; c<COLS; c++) {
+    for(let r=0; r<ROWS; r++) {
+      const b = grid[c][r];
+      if(!b) continue;
+      // Smooth position interpolation
+      const speed = 0.15;
+      b.x += (b.col - b.x) * speed;
+      b.y += (b.row - b.y) * speed;
+      // Scale bounce back
+      if(b.scale > 1) b.scale += (1 - b.scale) * 0.1;
+      // Remove animation
+      if(b.removing) {
+        b.removeTimer -= dt;
+        b.scale = 1 + 0.3 * (1 - b.removeTimer / MATCH_ANIM);
+        b.opacity = Math.max(0, b.removeTimer / MATCH_ANIM);
+      }
+    }
+  }
+
+  // Particles
+  for(let i=particles.length-1; i>=0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15;
+    p.life -= dt;
+    if(p.life <= 0) particles.splice(i,1);
+  }
+
+  updateHUD();
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+// ===== RENDER =====
+function render() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Background grid
+  const bgCol = '#faf6f0';
+  ctx.fillStyle = bgCol;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = 'rgba(100,140,200,0.4)';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([2, 4]);
+  for(let c=0; c<=COLS; c++) {
+    ctx.beginPath(); ctx.moveTo(c*cellSize,0); ctx.lineTo(c*cellSize,canvas.height); ctx.stroke();
+  }
+  for(let r=0; r<=ROWS; r++) {
+    ctx.beginPath(); ctx.moveTo(0,r*cellSize); ctx.lineTo(canvas.width,r*cellSize); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Freeze overlay
+  if(freezeTimer > 0) {
+    ctx.fillStyle = 'rgba(100,200,255,0.08)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  // Blocks
+  for(let c=0; c<COLS; c++) {
+    for(let r=0; r<ROWS; r++) {
+      const b = grid[c][r];
+      if(!b) continue;
+      drawBlock(b);
+    }
+  }
+
+  // Frozen block overlay
+  for(let c=0; c<COLS; c++) {
+    for(let r=0; r<ROWS; r++) {
+      const b = grid[c][r];
+      if(!b) continue;
+      const bx = b.x * cellSize, by = b.y * cellSize;
+      // Frozen
+      if(b.frozenTimer > 0) {
+        ctx.globalAlpha = Math.min(0.22, b.frozenTimer / 15000);
+        ctx.fillStyle = '#90caf9';
+        ctx.fillRect(bx+1, by+1, cellSize-2, cellSize-2);
+        ctx.globalAlpha = 0.5;
+        ctx.font = `${cellSize*0.16}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('❄️', bx+cellSize/2, by+cellSize*0.15);
+        ctx.globalAlpha = 1;
+      }
+      // Spider web
+      if(b.webTimer > 0) {
+        ctx.globalAlpha = 0.5;
+        ctx.font = `${cellSize*0.22}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('🕸️', bx+cellSize/2, by+cellSize*0.18);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  // Item preview (dotted outline)
+  if(itemPreviewing && activeItem && itemPreviewCol >= 0) {
+    ctx.setLineDash([5,4]);
+    ctx.lineWidth = 2.5;
+    if(activeItem === 'ice') {
+      // 4×4 blue outline
+      ctx.strokeStyle = '#1e88e5';
+      const sx = Math.max(0, Math.min(itemPreviewCol-1, COLS-4));
+      const sy = Math.max(0, Math.min(itemPreviewRow-1, ROWS-4));
+      ctx.strokeRect(sx*cellSize+1, sy*cellSize+1, 4*cellSize-2, 4*cellSize-2);
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = '#90caf9';
+      ctx.fillRect(sx*cellSize, sy*cellSize, 4*cellSize, 4*cellSize);
+      ctx.globalAlpha = 1;
+    } else if(activeItem === 'bomb') {
+      // 2×2 red outline
+      ctx.strokeStyle = '#e53935';
+      const sx = Math.min(itemPreviewCol, COLS-2);
+      const sy = Math.min(itemPreviewRow, ROWS-2);
+      ctx.strokeRect(sx*cellSize+1, sy*cellSize+1, 2*cellSize-2, 2*cellSize-2);
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = '#ffcdd2';
+      ctx.fillRect(sx*cellSize, sy*cellSize, 2*cellSize, 2*cellSize);
+      ctx.globalAlpha = 1;
+    }
+    ctx.setLineDash([]);
+  }
+
+  // Particles
+  for(const p of particles) {
+    const alpha = Math.max(0, p.life / p.maxLife);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x * cellSize + cellSize/2, p.y * cellSize + cellSize/2, p.size, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawBlock(b) {
+  const cx = b.x * cellSize + cellSize/2;
+  const cy = b.y * cellSize + cellSize/2;
+  ctx.save();
+  ctx.globalAlpha = b.opacity;
+  if(b.isClock) drawClockBlock(b, cx, cy);
+  else if(b.type === RAINBOW_TYPE) drawRainbowBlock(b, cx, cy);
+  else drawPlantBlock(b, cx, cy);
+  ctx.restore();
+}
+
+function drawRainbowBlock(b, cx, cy) {
+  const half = cellSize / 2;
+  const now = performance.now();
+  const r = half * 0.42 * b.scale;
+  // Pulsing glow ring
+  const glowR = r * (1.1 + Math.sin(now*0.004)*0.15);
+  ctx.globalAlpha = b.opacity * 0.2;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(cx, cy, glowR, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = b.opacity;
+  // Animated rainbow gradient
+  const angle = now * 0.003;
+  const colors = ['#e91e63','#ff9800','#ffeb3b','#4caf50','#2196f3','#9c27b0'];
+  for(let i=0; i<6; i++) {
+    const a = angle + (i/6)*Math.PI*2;
+    const px = cx + Math.cos(a)*r*0.35;
+    const py = cy + Math.sin(a)*r*0.35;
+    ctx.fillStyle = colors[i];
+    ctx.globalAlpha = b.opacity * 0.7;
+    ctx.beginPath();
+    ctx.arc(px, py, r*0.5, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = b.opacity;
+  // Center white star
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  const ss = r*0.3;
+  ctx.moveTo(cx,cy-ss); ctx.lineTo(cx+ss*0.25,cy-ss*0.25);
+  ctx.lineTo(cx+ss,cy); ctx.lineTo(cx+ss*0.25,cy+ss*0.25);
+  ctx.lineTo(cx,cy+ss); ctx.lineTo(cx-ss*0.25,cy+ss*0.25);
+  ctx.lineTo(cx-ss,cy); ctx.lineTo(cx-ss*0.25,cy-ss*0.25);
+  ctx.closePath(); ctx.fill();
+  // Label
+  ctx.font = `bold ${cellSize*0.14}px sans-serif`;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText('🌈', cx, cy + half*0.92);
+}
+
+// ── Utilities ──
+function lerpColor(a, b, t) {
+  const pa = [parseInt(a.slice(1,3),16),parseInt(a.slice(3,5),16),parseInt(a.slice(5,7),16)];
+  const pb = [parseInt(b.slice(1,3),16),parseInt(b.slice(3,5),16),parseInt(b.slice(5,7),16)];
+  const r = Math.round(pa[0]+(pb[0]-pa[0])*t), g = Math.round(pa[1]+(pb[1]-pa[1])*t), bl = Math.round(pa[2]+(pb[2]-pa[2])*t);
+  return `rgb(${r},${g},${bl})`;
+}
+function ease(t) { return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2; }
+
+// ── Leaf shape (drawn from center outward) ──
+function drawLeafShape(cx, cy, size, angle, color) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  // Leaf path
+  function leafPath() {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(size*0.5, -size*0.45, size, 0);
+    ctx.quadraticCurveTo(size*0.5, size*0.45, 0, 0);
+  }
+  // Color pencil: layered semi-transparent fills
+  leafPath();
+  ctx.fillStyle = color;
+  ctx.globalAlpha *= 0.7;
+  ctx.fill();
+  // Second layer
+  ctx.translate(0.4, 0.2);
+  leafPath();
+  ctx.globalAlpha *= 0.5;
+  ctx.fill();
+  ctx.translate(-0.4, -0.2);
+  // Highlight streak
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(size*0.38, -size*0.08, size*0.22, size*0.08, -0.2, 0, Math.PI*2);
+  ctx.fill();
+  // Soft outline
+  leafPath();
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── Color-pencil style plump petal ──
+function drawRoundPetal(cx, cy, dist, r, angle, color, lightColor) {
+  const px = cx + Math.cos(angle) * dist;
+  const py = cy + Math.sin(angle) * dist;
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(angle + Math.PI);
+  const w = r * 1.15, h = r * 1.25;
+  // Plump petal path
+  function petalPath() {
+    ctx.beginPath();
+    ctx.moveTo(0, h*0.3);
+    ctx.bezierCurveTo(-w*1.0, h*0.15, -w*0.85, -h*0.7, 0, -h*0.45);
+    ctx.bezierCurveTo(w*0.85, -h*0.7, w*1.0, h*0.15, 0, h*0.3);
+  }
+  // Color pencil: layered semi-transparent fills for texture
+  petalPath();
+  ctx.fillStyle = color;
+  ctx.globalAlpha *= 0.7;
+  ctx.fill();
+  // Second layer slightly offset for pencil texture
+  ctx.save();
+  ctx.translate(0.5, 0.3);
+  petalPath();
+  ctx.globalAlpha *= 0.5;
+  ctx.fill();
+  ctx.restore();
+  // Light layer on top half
+  ctx.globalAlpha = ctx.globalAlpha / 0.35 * 0.3;
+  ctx.save();
+  petalPath();
+  ctx.clip();
+  ctx.fillStyle = lightColor || '#fff';
+  ctx.beginPath();
+  ctx.ellipse(-w*0.1, -h*0.2, w*0.6, h*0.4, -0.3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+  // Soft sketchy outline
+  ctx.globalAlpha = 1;
+  petalPath();
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = 1.0;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── Clock block ──
+function drawClockBlock(b, cx, cy) {
+  const clockR = cellSize * (0.22 + b.growth * 0.07) * b.scale;
+  const grad = ctx.createRadialGradient(cx-clockR*0.2, cy-clockR*0.2, 0, cx, cy, clockR);
+  grad.addColorStop(0, CLOCK_COLORS[0]);
+  grad.addColorStop(1, CLOCK_COLORS[1]);
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(cx, cy, clockR, 0, Math.PI*2); ctx.fill();
+  const ringColors = ['#fff8','#ffc107','#ff9800','#f44336'];
+  ctx.strokeStyle = ringColors[b.growth];
+  ctx.lineWidth = b.growth >= 2 ? 3 : 2;
+  ctx.beginPath(); ctx.arc(cx, cy, clockR+2, 0, Math.PI*2); ctx.stroke();
+  const eSize = cellSize * (0.22 + b.growth * 0.06);
+  ctx.font = `${eSize}px serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('⏰', cx, cy - clockR*0.12);
+  const bonus = CLOCK_TIME_BONUS[b.growth];
+  ctx.font = `bold ${cellSize*0.15}px sans-serif`;
+  ctx.fillStyle = bonus >= 0 ? '#fff' : '#ff6b6b';
+  ctx.fillText((bonus>=0?'+':'')+bonus+'s', cx, cy + clockR*0.55);
+  for(let i=0; i<3; i++) {
+    ctx.fillStyle = i < b.growth ? '#fff' : 'rgba(255,255,255,0.25)';
+    ctx.beginPath(); ctx.arc(cx - 6 + i*6, cy + clockR + 6, 2, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+// ── Plant block: stemless, color-family approach ──
+function drawPlantBlock(b, cx, cy) {
+  const pal = TYPE_PALETTE[b.type]; // [pale, mid, vivid, center]
+  const half = cellSize / 2;
+  const now = performance.now();
+  const stageTime = GROWTH_TIMES[Math.min(b.growth, 2)];
+  const stageP = b.growth < 3 ? b.growthTimer / stageTime : 1;
+
+  // Continuous lifecycle progress 0→1 (sprout 0-0.2, leaf 0.2-0.4, flower 0.4-1.0)
+  let elapsed = 0;
+  for(let i = 0; i < Math.min(b.growth, 3); i++) elapsed += GROWTH_TIMES[i];
+  if(b.growth < 3) elapsed += b.growthTimer;
+  const totalP = b.growth >= 3 ? 1.0 : elapsed / TOTAL_GROWTH;
+
+  const sway = Math.sin(now * 0.002 + b.col * 1.7 + b.row * 0.9) * 0.06;
+
+  // ── PHASE 1: SPROUT (two leaves + short stem downward) ──
+  if(totalP < 0.28) {
+    const sprP = Math.min(1, totalP / 0.2);
+    const fadeOut = totalP > 0.2 ? 1 - (totalP-0.2)/0.08 : 1;
+    const sz = half * (0.82 + 0.10 * ease(sprP));
+    ctx.globalAlpha = b.opacity * fadeOut;
+    // Short stem downward
+    const stemLen = half * 0.40;
+    ctx.strokeStyle = '#4a8a3f';
+    ctx.lineWidth = Math.max(2, cellSize * 0.045);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx, cy + stemLen);
+    ctx.stroke();
+    // Two leaves angled upward from top of stem
+    const rot = -Math.PI/2;
+    drawLeafShape(cx, cy, sz, -0.65 + rot + sway, pal[1]);
+    drawLeafShape(cx, cy, sz,  0.65 + rot + sway, pal[1]);
+    // Center joint
+    ctx.fillStyle = pal[2];
+    ctx.beginPath();
+    ctx.arc(cx, cy, sz*0.18*ease(sprP), 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = b.opacity;
+  }
+
+  // ── PHASE 2: LEAVES (4 leaves at diagonal angles) ──
+  if(totalP > 0.12 && totalP < 0.50) {
+    const leafP = Math.min(1, (totalP - 0.12) / 0.26);
+    const fadeOut = totalP > 0.42 ? 1 - (totalP-0.42)/0.08 : 1;
+    const leafCount = leafP < 0.3 ? 2 : (leafP < 0.6 ? 3 : 4);
+    const sz = half * (0.55 + 0.20 * ease(leafP));
+    ctx.globalAlpha = b.opacity * Math.max(0.3, fadeOut);
+    for(let i=0; i<leafCount; i++) {
+      // Diagonal: 45°, 135°, 225°, 315°
+      const angle = (i / leafCount) * Math.PI * 2 + Math.PI/4 + sway;
+      drawLeafShape(cx, cy, sz, angle, pal[1]);
+    }
+    ctx.fillStyle = pal[0];
+    ctx.beginPath();
+    ctx.arc(cx, cy, sz*0.20, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = b.opacity;
+  }
+
+  // ── BUD (transition to flower) ──
+  if(totalP > 0.32 && totalP < 0.45) {
+    const budP = ease(Math.min(1, (totalP - 0.32) / 0.08));
+    const budR = half * 0.1 * budP;
+    ctx.fillStyle = pal[2];
+    ctx.globalAlpha = b.opacity * (0.4 + budP * 0.5);
+    ctx.beginPath();
+    ctx.arc(cx, cy, budR, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = b.opacity;
+  }
+
+  // ── PHASE 3: FLOWER (round petals, big center — very distinct from pointed leaves) ──
+  if(totalP > 0.35) {
+    const flP = Math.min(1, (totalP - 0.35) / 0.12);
+    const openness = ease(flP);
+    const petalN = [5,8,6,7,5][b.type] || 5;
+    let pColor = pal[2];
+    let cColor = pal[3];
+    let lightC = pal[0];
+    let droopY = 0;
+    let flowerScale = openness;
+
+    // Wilt warning: 2 stages (totalP 0.70→0.85→1.0)
+    const wiltWarnStart = 0.70;
+    if(totalP > wiltWarnStart && totalP < 1.0) {
+      const warnP = (totalP - wiltWarnStart) / (1.0 - wiltWarnStart); // 0→1
+      const pulse = Math.sin(now * 0.006 * (1 + warnP * 2)) * 0.06 * warnP;
+
+      if(warnP < 0.5) {
+        // Stage 1: slight fade, type color still clear
+        const t = warnP / 0.5;
+        pColor = lerpColor(pal[2], '#b8a070', t * 0.25);
+        cColor = lerpColor(pal[3], '#8a7a50', t * 0.2);
+        lightC = lerpColor(pal[0], '#ddd0b8', t * 0.2);
+      } else {
+        // Stage 2: more faded, urgent
+        const t = (warnP - 0.5) / 0.5;
+        pColor = lerpColor(pal[2], '#9a8558', 0.25 + t * 0.25);
+        cColor = lerpColor(pal[3], '#6a5a38', 0.2 + t * 0.2);
+        lightC = lerpColor(pal[0], '#c0b090', 0.2 + t * 0.25);
+        flowerScale = openness * (1 - t * 0.06 + pulse);
+        droopY = half * t * 0.04;
+      }
+
+      // Pulsing warning ring
+      const ringAlpha = 0.3 + warnP * 0.5;
+      const ringPulse = Math.sin(now * 0.008 * (1 + warnP * 2)) * 0.15;
+      const ringColor = warnP < 0.5 ? `rgba(255,152,0,${ringAlpha + ringPulse})` : `rgba(244,67,54,${ringAlpha + ringPulse})`;
+      ctx.strokeStyle = ringColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, half * 0.48, 0, Math.PI*2);
+      ctx.stroke();
+    }
+
+    // Fully wilted — clearly brown/grey
+    if(totalP >= 1.0) {
+      pColor = '#7a6a48';
+      cColor = '#4a3a20';
+      lightC = '#a09070';
+      droopY = half * 0.10;
+      flowerScale = Math.max(0.5, openness * 0.68);
+    }
+
+    // Glow when in full bloom
+    if(openness > 0.7 && totalP < wiltWarnStart) {
+      ctx.shadowColor = pal[2];
+      ctx.shadowBlur = 14 + Math.sin(now * 0.003) * 5;
+    }
+
+    // Plump petals filling to center
+    const dist = half * 0.26 * flowerScale;
+    const petalR = half * 0.38 * flowerScale;
+    for(let i=0; i<petalN; i++) {
+      const a = (i / petalN) * Math.PI * 2 + sway;
+      drawRoundPetal(cx, cy + droopY, dist, petalR, a, pColor, lightC);
+    }
+    ctx.shadowBlur = 0;
+
+    // Smaller anime center
+    const cr = half * 0.10 * flowerScale;
+    // Center fill with outline
+    ctx.fillStyle = cColor;
+    ctx.beginPath();
+    ctx.arc(cx, cy + droopY, cr, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.arc(cx, cy + droopY, cr, 0, Math.PI*2);
+    ctx.stroke();
+    // Star-shaped highlight (anime sparkle)
+    if(totalP < 1.0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      const sx = cx - cr*0.2, sy = cy + droopY - cr*0.2;
+      const ss = cr * 0.35;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - ss);
+      ctx.lineTo(sx + ss*0.25, sy - ss*0.25);
+      ctx.lineTo(sx + ss, sy);
+      ctx.lineTo(sx + ss*0.25, sy + ss*0.25);
+      ctx.lineTo(sx, sy + ss);
+      ctx.lineTo(sx - ss*0.25, sy + ss*0.25);
+      ctx.lineTo(sx - ss, sy);
+      ctx.lineTo(sx - ss*0.25, sy - ss*0.25);
+      ctx.closePath();
+      ctx.fill();
+      // Small dot sparkle
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.beginPath();
+      ctx.arc(cx + cr*0.3, cy + droopY + cr*0.15, cr*0.12, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // ── WILTED OVERLAY ──
+  if(b.growth >= 3) {
+    ctx.setLineDash([3,3]);
+    ctx.strokeStyle = 'rgba(255,60,60,0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, half * 0.44, 0, Math.PI*2); ctx.stroke();
+    ctx.setLineDash([]);
+    const s = half * 0.18;
+    ctx.strokeStyle = 'rgba(255,60,60,0.65)';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx-s,cy-s); ctx.lineTo(cx+s,cy+s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+s,cy-s); ctx.lineTo(cx-s,cy+s); ctx.stroke();
+  }
+
+  // ── SCORE LABEL ──
+  if(b.growth < 3) {
+    const labels = ['10','30','80'];
+    const lCols = ['rgba(0,0,0,0.22)','rgba(0,0,0,0.35)','#c67100'];
+    ctx.font = `bold ${cellSize*0.24}px sans-serif`;
+    ctx.fillStyle = lCols[b.growth];
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(labels[b.growth], cx, cy + half * 0.95);
+  }
+}
+
+// ===== PARTICLES =====
+function spawnParticles(col, row, type) {
+  const colors = type === TYPES ? CLOCK_COLORS : TYPE_COLORS[type] || ['#fff','#ccc'];
+  for(let i=0; i<8; i++) {
+    particles.push({
+      x: col + Math.random()*0.5-0.25,
+      y: row + Math.random()*0.5-0.25,
+      vx: (Math.random()-0.5)*0.3,
+      vy: (Math.random()-0.5)*0.3 - 0.15,
+      size: 2 + Math.random()*3,
+      color: colors[Math.floor(Math.random()*colors.length)],
+      life: 400 + Math.random()*300,
+      maxLife: 700
+    });
+  }
+}
+
+// ===== HUD =====
+function updateHUD() {
+  const timerEl = document.getElementById('timer');
+  timerEl.textContent = Math.max(0, gameTime).toFixed(1);
+  timerEl.className = gameTime < 10 ? 'danger' : '';
+
+  // Timer bar
+  const barPct = Math.max(0, Math.min(100, (gameTime / MAX_TIME) * 100));
+  const bar = document.getElementById('timer-bar');
+  bar.style.width = barPct + '%';
+  if(gameTime < 20) bar.style.background = 'linear-gradient(90deg,#e53935,#ff6b6b)';
+  else bar.style.background = 'linear-gradient(90deg,#2e7d32,#66bb6a)';
+
+  document.getElementById('score').textContent = gameScore.toLocaleString();
+
+  // Growth speed display (uses totalWilted - cumulative, never decreases)
+  const wc = totalWilted;
+  const tMult = Math.floor(elapsedTime / 90000) * 0.1;
+  const calcGm = 1.0 + Math.floor(wc / 10) * 0.1 + tMult;
+  if(calcGm > maxGrowthMult) maxGrowthMult = calcGm;
+  const gm = maxGrowthMult;
+  document.getElementById('growth-wilted').textContent = '🥀Wilted ' + wc;
+  const speedEl = document.getElementById('growth-speed');
+  speedEl.textContent = '🌱Speed ×' + gm.toFixed(1);
+  speedEl.style.color = gm >= 1.6 ? '#ff6b6b' : gm >= 1.1 ? '#ff9800' : 'rgba(255,255,255,0.9)';
+
+  // High score check during play
+  if(gameScore > highScore && highScore > 0 && !highScoreBeaten) {
+    highScoreBeaten = true;
+    const banner = document.getElementById('highscore-banner');
+    banner.innerHTML = '<span class="rainbow-text">✨ HIGH SCORE! ✨</span>';
+    banner.className = 'show';
+  }
+
+  const comboEl = document.getElementById('combo');
+  if(comboCount >= 2) {
+    comboEl.textContent = `${comboCount} COMBO`;
+    if(comboCount >= 5) comboEl.textContent += ' 🔥';
+    comboEl.className = 'active';
+  } else {
+    comboEl.className = '';
+  }
+}
+
+function showScorePopup(score, matches) {
+  if(score <= 0) return;
+  const avgCol = matches.reduce((s,b)=>s+b.col,0)/matches.length;
+  const avgRow = matches.reduce((s,b)=>s+b.row,0)/matches.length;
+  const el = document.createElement('div');
+  el.className = 'score-popup';
+  el.textContent = '+' + score.toLocaleString();
+  if(comboCount >= 3) el.style.fontSize = '26px';
+  if(comboCount >= 5) el.style.fontSize = '32px';
+  const rect = canvas.getBoundingClientRect();
+  el.style.left = (rect.left + (avgCol+0.5)*cellSize - 30) + 'px';
+  el.style.top = (rect.top + (avgRow+0.5)*cellSize - 30) + 'px';
+  document.getElementById('game-container').appendChild(el);
+  setTimeout(()=>el.remove(), 800);
+}
+
+function showTimePopupAt(bonus, matches) {
+  if(bonus <= 0) return;
+  const avgCol = matches.reduce((s,b)=>s+b.col,0)/matches.length;
+  const avgRow = matches.reduce((s,b)=>s+b.row,0)/matches.length;
+  // Get type color from matched blocks
+  const typeIdx = matches[0] ? matches[0].type : 0;
+  const typeColor = TYPE_PALETTE[typeIdx] ? TYPE_PALETTE[typeIdx][2] : '#4fc3f7';
+  const el = document.createElement('div');
+  el.className = 'time-popup';
+  const rect = canvas.getBoundingClientRect();
+  el.style.left = (rect.left + (avgCol+0.5)*cellSize - 30) + 'px';
+  el.style.top = (rect.top + (avgRow+0.5)*cellSize + 14) + 'px';
+  if(bonus >= 10) {
+    el.innerHTML = '<span class="rainbow-text">+' + bonus + 's!</span>';
+    el.style.fontSize = '24px';
+  } else {
+    el.textContent = '+' + bonus + 's';
+    el.style.color = typeColor;
+    el.style.fontSize = '18px';
+  }
+  document.getElementById('game-container').appendChild(el);
+  setTimeout(()=>el.remove(), 1200);
+}
+
+// ===== UTILS =====
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function showWiltPenalty(col, row) {
+  const el = document.createElement('div');
+  el.className = 'time-popup';
+  el.textContent = '-5s';
+  el.style.color = '#e53935';
+  el.style.fontSize = '20px';
+  el.style.fontWeight = '900';
+  const rect = canvas.getBoundingClientRect();
+  el.style.left = (rect.left + (col+0.5)*cellSize - 25) + 'px';
+  el.style.top = (rect.top + (row+0.5)*cellSize) + 'px';
+  document.getElementById('game-container').appendChild(el);
+  setTimeout(()=>el.remove(), 1200);
+}
+
+// ===== ITEM SYSTEM =====
+function showItemSelection() {
+  document.getElementById('item-select').style.display = 'flex';
+  gameRunning = false; // pause
+}
+
+function selectItem(type) {
+  document.getElementById('item-select').style.display = 'none';
+  inventory.push(type);
+  renderItemBar();
+  gameRunning = true;
+  lastTime = performance.now();
+  startBGM();
+  requestAnimationFrame(gameLoop);
+}
+
+function renderItemBar() {
+  const bar = document.getElementById('item-bar');
+  bar.innerHTML = '';
+  const counts = {};
+  inventory.forEach(t => { counts[t] = (counts[t]||0) + 1; });
+  const icons = {vacuum:'🧹', ice:'❄️', bomb:'💣', vortex:'🌀', lightning:'⚡'};
+  // Fixed order so items don't swap positions
+  const fixedOrder = ['vacuum','ice','bomb','vortex','lightning'];
+  fixedOrder.forEach(type => {
+    if(!counts[type]) return;
+    const btn = document.createElement('button');
+    btn.className = 'item-inv-btn';
+    if(activeItem === type) btn.className += ' active';
+    btn.innerHTML = icons[type] + '<span class="item-count">×' + counts[type] + '</span>';
+    btn.addEventListener('click', () => {
+      const idx = inventory.indexOf(type);
+      if(type === 'vacuum') {
+        // Clear ALL wilted flowers on board
+        let removed = 0;
+        for(let c=0;c<COLS;c++) for(let r=0;r<ROWS;r++) {
+          const b = grid[c][r];
+          if(b && b.isWilted) {
+            spawnParticles(c, r, b.type);
+            grid[c][r] = null;
+            removed++;
+          }
+        }
+        if(removed > 0) {
+          playVacuumSound();
+          // Sweep effect
+          const sweep = document.createElement('div');
+          sweep.className = 'sweep-bar';
+          sweep.style.height = canvas.height + 'px';
+          canvas.parentElement.appendChild(sweep);
+          setTimeout(()=>sweep.remove(), 800);
+          const el = document.createElement('div');
+          el.className = 'score-popup';
+          el.textContent = '🧹 '+removed+'removed！';
+          el.style.left='50%';el.style.top='40%';el.style.transform='translateX(-50%)';el.style.color='#2e7d32';
+          document.getElementById('game-container').appendChild(el);
+          setTimeout(()=>el.remove(), 1200);
+          inventory.splice(idx, 1);
+          renderItemBar();
+          (async()=>{await applyGravity();await fillBoard();await delay(200);await processMatches();})();
+        }
+      } else if(type === 'vortex') {
+        // Rewind growth by 30 seconds (wilted stays wilted)
+        const rewindTotal = 10000;
+        let affected = 0;
+        for(let c=0;c<COLS;c++) for(let r=0;r<ROWS;r++) {
+          const b = grid[c][r];
+          if(!b || b.isWilted || b.type === RAINBOW_TYPE) continue;
+          let rw = rewindTotal;
+          // Subtract from current growthTimer
+          if(b.growthTimer >= rw) {
+            b.growthTimer -= rw;
+            rw = 0;
+          } else {
+            rw -= b.growthTimer;
+            b.growthTimer = 0;
+            // Go back growth stages
+            while(rw > 0 && b.growth > 0) {
+              b.growth--;
+              const prev = GROWTH_TIMES[b.growth];
+              if(rw >= prev) {
+                rw -= prev;
+                b.growthTimer = 0;
+              } else {
+                b.growthTimer = prev - rw;
+                rw = 0;
+              }
+            }
+          }
+          affected++;
+        }
+        playVortexSound();
+        // Spinning vortex visual
+        const vfx = document.createElement('div');
+        vfx.className = 'vortex-effect';
+        vfx.textContent = '🌀';
+        vfx.style.left = '50%'; vfx.style.top = '50%';
+        document.getElementById('game-container').appendChild(vfx);
+        setTimeout(()=>vfx.remove(), 1100);
+        const el = document.createElement('div');
+        el.className = 'time-popup';
+        el.innerHTML = '<span class="rainbow-text">🌀 10s Rewind！</span>';
+        el.style.fontSize = '24px';
+        el.style.left = '50%'; el.style.top = '40%';
+        el.style.transform = 'translateX(-50%)';
+        document.getElementById('game-container').appendChild(el);
+        setTimeout(()=>el.remove(), 1200);
+        inventory.splice(idx, 1);
+        renderItemBar();
+        updateHUD();
+      } else if(type === 'lightning') {
+        useLightning();
+        inventory.splice(idx, 1);
+        renderItemBar();
+      } else {
+        toggleItemMode(type, idx);
+      }
+    });
+    bar.appendChild(btn);
+  });
+}
+
+function toggleItemMode(type, index) {
+  if(activeItem === type && activeItemIndex === index) {
+    cancelItemMode();
+    return;
+  }
+  activeItem = type;
+  activeItemIndex = index;
+  renderItemBar();
+  const hint = document.getElementById('item-mode-hint');
+  const msgs = {ice:'Tap to freeze area', bomb:'Tap to destroy area'};
+  hint.textContent = msgs[type];
+  hint.style.display = 'block';
+}
+
+function cancelItemMode() {
+  activeItem = null;
+  activeItemIndex = -1;
+  renderItemBar();
+  document.getElementById('item-mode-hint').style.display = 'none';
+}
+
+function useItemAt(col, row) {
+  if(!activeItem || activeItemIndex < 0) return false;
+
+  if(activeItem === 'ice') {
+    // 4×4 area from tapped cell as center (clamped)
+    const startC = Math.max(0, Math.min(col-1, COLS-4));
+    const startR = Math.max(0, Math.min(row-1, ROWS-4));
+    let frozen = 0;
+    for(let dc=0; dc<4; dc++) {
+      for(let dr=0; dr<4; dr++) {
+        const c2=Math.max(0,startC+dc), r2=Math.max(0,startR+dr);
+        if(c2>=COLS||r2>=ROWS) continue;
+        const b = grid[c2][r2];
+        if(b && b.growth < 3) {
+          b.frozenTimer = 60000;
+          frozen++;
+        }
+      }
+    }
+    if(frozen === 0) return false;
+    playIceSound();
+    // Frost ring effect
+    const rect = canvas.getBoundingClientRect();
+    const frostX = rect.left + (startC+2)*cellSize;
+    const frostY = rect.top + (startR+2)*cellSize;
+    const ring = document.createElement('div');
+    ring.className = 'frost-ring';
+    ring.style.left = (frostX - 60) + 'px'; ring.style.top = (frostY - 60) + 'px';
+    ring.style.width = '120px'; ring.style.height = '120px';
+    document.body.appendChild(ring);
+    setTimeout(()=>ring.remove(), 800);
+
+  } else if(activeItem === 'bomb') {
+    let destroyed = 0;
+    // 2×2 area: tapped cell is top-left
+    const startC = Math.min(col, COLS-2);
+    const startR = Math.min(row, ROWS-2);
+    for(let dc=0; dc<2; dc++) {
+      for(let dr=0; dr<2; dr++) {
+        const c2=startC+dc, r2=startR+dr;
+        const b = grid[c2][r2];
+        if(b && !b.isWilted) {
+          spawnParticles(c2, r2, b.type);
+          grid[c2][r2] = null;
+          destroyed++;
+        }
+      }
+    }
+    if(destroyed === 0) return false;
+    playBombSound();
+    // Screen shake
+    canvas.classList.add('screen-shake');
+    setTimeout(()=>canvas.classList.remove('screen-shake'), 350);
+    // No time bonus! Gravity + fill
+    (async()=>{
+      await applyGravity();
+      await fillBoard();
+      if(gameRunning && !hasValidMoves()) { endGame('🚫 No moves!'); }
+    })();
+  }
+
+  // Consume item
+  inventory.splice(activeItemIndex, 1);
+  cancelItemMode();
+  return true;
+}
+
+function handleItemTap(px, py) {
+  if(!activeItem) return false;
+  const cell = getCellFromPos(px, py);
+  if(!cell) return false;
+  return useItemAt(cell.col, cell.row);
+}
+
+// ===== AUDIO SYSTEM =====
+let audioCtx;
+let bgmInterval;
+
+function initAudio() {
+  if(audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playNote(freq, duration, vol, type, delayMs) {
+  if(!audioCtx) return;
+  const t = audioCtx.currentTime + (delayMs||0)/1000;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type || 'sine';
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(vol||0.08, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  osc.start(t);
+  osc.stop(t + duration);
+}
+
+function playMatchSound() {
+  playNote(660, 0.15, 0.28, 'sine');
+  playNote(880, 0.15, 0.22, 'sine', 50);
+  playNote(1100, 0.12, 0.15, 'sine', 100);
+}
+
+function playComboSound(level) {
+  // Distinct sparkly chord - higher pitch, different waveform
+  const bases = [784, 988, 1175, 1320, 1568];
+  for(let i=0; i<Math.min(level+1, 6); i++) {
+    const freq = bases[i % bases.length] + level * 30;
+    playNote(freq, 0.2, 0.18, 'sine', i*55);
+    playNote(freq * 1.5, 0.12, 0.08, 'triangle', i*55 + 30);
+  }
+  // Low punch for impact
+  playNote(330, 0.25, 0.15, 'triangle');
+}
+
+function playDeadlockSound() {
+  playNote(400, 0.3, 0.1, 'sawtooth');
+  playNote(300, 0.4, 0.1, 'sawtooth', 200);
+}
+
+function playVacuumSound() {
+  // Suction whoosh: descending sweep
+  if(!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sawtooth';
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.frequency.setValueAtTime(800, t);
+  osc.frequency.exponentialRampToValueAtTime(150, t + 0.35);
+  gain.gain.setValueAtTime(0.15, t);
+  gain.gain.linearRampToValueAtTime(0.2, t + 0.08);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+  osc.start(t); osc.stop(t + 0.4);
+  // Pop at end
+  playNote(500, 0.08, 0.18, 'sine', 280);
+}
+
+function playIceSound() {
+  // Crystallizing: high sparkly cascade
+  playNote(2000, 0.12, 0.12, 'sine');
+  playNote(2400, 0.10, 0.10, 'sine', 50);
+  playNote(1800, 0.14, 0.10, 'sine', 100);
+  playNote(2600, 0.10, 0.08, 'sine', 160);
+  playNote(3000, 0.15, 0.06, 'sine', 220);
+  // Low shimmer
+  playNote(600, 0.4, 0.08, 'triangle');
+}
+
+function playBombSound() {
+  // Explosion: low burst + debris
+  if(!audioCtx) return;
+  const t = audioCtx.currentTime;
+  // Noise burst via oscillator
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sawtooth';
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.frequency.setValueAtTime(100, t);
+  osc.frequency.exponentialRampToValueAtTime(40, t + 0.3);
+  gain.gain.setValueAtTime(0.25, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+  osc.start(t); osc.stop(t + 0.35);
+  // Impact thud
+  playNote(80, 0.2, 0.2, 'sine');
+  playNote(120, 0.15, 0.15, 'triangle', 30);
+  // Debris scatter
+  playNote(400, 0.08, 0.1, 'square', 100);
+  playNote(550, 0.06, 0.08, 'square', 150);
+  playNote(350, 0.07, 0.08, 'square', 200);
+}
+
+function playVortexSound() {
+  // Swirling rewind: ascending spiral
+  if(!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.frequency.setValueAtTime(300, t);
+  osc.frequency.exponentialRampToValueAtTime(1200, t + 0.4);
+  osc.frequency.exponentialRampToValueAtTime(600, t + 0.6);
+  gain.gain.setValueAtTime(0.15, t);
+  gain.gain.linearRampToValueAtTime(0.2, t + 0.2);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.65);
+  osc.start(t); osc.stop(t + 0.65);
+  playNote(800, 0.15, 0.08, 'triangle', 150);
+  playNote(1000, 0.12, 0.06, 'triangle', 250);
+  playNote(1200, 0.10, 0.05, 'triangle', 350);
+}
+
+function playLightningSound() {
+  if(!audioCtx) return;
+  // Electric crack
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sawtooth';
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.frequency.setValueAtTime(2000, t);
+  osc.frequency.exponentialRampToValueAtTime(80, t + 0.15);
+  gain.gain.setValueAtTime(0.25, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  osc.start(t); osc.stop(t + 0.2);
+  // Crackle hits
+  playNote(1500, 0.05, 0.15, 'square', 50);
+  playNote(800, 0.06, 0.12, 'square', 100);
+  playNote(1200, 0.04, 0.1, 'square', 160);
+  // Thunder rumble
+  playNote(60, 0.4, 0.15, 'triangle', 180);
+}
+
+function useLightning() {
+  // Randomly destroy 3-5 blocks (including wilted)
+  const count = 1 + Math.floor(Math.random()*5); // 1 to 5
+  const candidates = [];
+  for(let c=0; c<COLS; c++) {
+    for(let r=0; r<ROWS; r++) {
+      if(grid[c][r] && !grid[c][r].removing) candidates.push({c,r});
+    }
+  }
+  // Shuffle candidates
+  for(let i=candidates.length-1; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+  const targets = candidates.slice(0, Math.min(count, candidates.length));
+  playLightningSound();
+  // Flash + shake
+  const bolt = document.createElement('div');
+  bolt.className = 'bolt-overlay';
+  canvas.parentElement.appendChild(bolt);
+  setTimeout(()=>bolt.remove(), 600);
+  canvas.classList.add('screen-shake');
+  setTimeout(()=>canvas.classList.remove('screen-shake'), 350);
+  for(const t of targets) {
+    const b = grid[t.c][t.r];
+    spawnParticles(t.c, t.r, b.type);
+    grid[t.c][t.r] = null;
+  }
+  // Show popup
+  const el = document.createElement('div');
+  el.className = 'score-popup';
+  el.textContent = '⚡ ' + targets.length + 'destroyed!';
+  el.style.left = '50%'; el.style.top = '40%';
+  el.style.transform = 'translateX(-50%)';
+  el.style.color = '#f57f17';
+  document.getElementById('game-container').appendChild(el);
+  setTimeout(()=>el.remove(), 1000);
+  // Gravity + fill
+  (async()=>{
+    await applyGravity();
+    await fillBoard();
+    await delay(200);
+    await processMatches();
+  })();
+}
+
+let bgmNoteIndex = 0;
+let bgmTimeout = null;
+
+function startBGM() {
+  if(bgmTimeout) { clearTimeout(bgmTimeout); bgmTimeout = null; }
+  if(bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
+  const melody = [
+    523,587,659,784, 659,587,523,0,
+    659,698,784,880, 784,698,659,0,
+    523,659,784,1047, 784,659,523,0,
+    440,523,587,659, 523,440,392,0
+  ];
+  function playNext() {
+    if(!gameRunning) return;
+    const f = melody[bgmNoteIndex % melody.length];
+    if(f > 0) playNote(f, 0.18, 0.035, 'sine');
+    bgmNoteIndex++;
+    const gMult = maxGrowthMult;
+    let tempo = Math.round(220 - (gMult - 1.0) * 60);
+    if(gameTime < 20) tempo = Math.min(tempo, 140);
+    tempo = Math.max(tempo, 120);
+    bgmTimeout = setTimeout(playNext, tempo);
+  }
+  playNext();
+}
+
+function stopBGM() {
+  if(bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
+  if(bgmTimeout) { clearTimeout(bgmTimeout); bgmTimeout = null; }
+}
+
+// ===== LEGEND RENDERING =====
+function renderLegend() {
+  const pal = TYPE_PALETTE[0]; // Use rose colors for demo
+  // Sprout
+  const c1 = document.getElementById('leg-sprout');
+  if(c1) { const x=c1.getContext('2d'); x.clearRect(0,0,20,20);
+    x.strokeStyle='#4a8a3f'; x.lineWidth=2; x.lineCap='round';
+    x.beginPath(); x.moveTo(10,10); x.lineTo(10,17); x.stroke();
+    x.fillStyle=pal[1];
+    x.save(); x.translate(10,10); x.rotate(-2.2);
+    x.beginPath(); x.moveTo(0,0); x.quadraticCurveTo(4,-3,8,0); x.quadraticCurveTo(4,3,0,0); x.fill();
+    x.restore();
+    x.save(); x.translate(10,10); x.rotate(-0.92);
+    x.beginPath(); x.moveTo(0,0); x.quadraticCurveTo(4,-3,8,0); x.quadraticCurveTo(4,3,0,0); x.fill();
+    x.restore();
+  }
+  // Leaf
+  const c2 = document.getElementById('leg-leaf');
+  if(c2) { const x=c2.getContext('2d'); x.clearRect(0,0,20,20);
+    x.fillStyle=pal[1];
+    for(let i=0;i<4;i++){
+      const a=(i/4)*Math.PI*2+Math.PI/4;
+      x.save(); x.translate(10,10); x.rotate(a);
+      x.beginPath(); x.moveTo(0,0); x.quadraticCurveTo(3,-3,7,0); x.quadraticCurveTo(3,3,0,0); x.fill();
+      x.restore();
+    }
+  }
+  // Flower
+  const c3 = document.getElementById('leg-flower');
+  if(c3) { const x=c3.getContext('2d'); x.clearRect(0,0,20,20);
+    x.fillStyle=pal[2];
+    for(let i=0;i<5;i++){
+      const a=(i/5)*Math.PI*2;
+      const px=10+Math.cos(a)*4, py=10+Math.sin(a)*4;
+      x.beginPath(); x.ellipse(px,py,3,2.5,a,0,Math.PI*2); x.fill();
+    }
+    x.fillStyle=pal[3];
+    x.beginPath(); x.arc(10,10,2.5,0,Math.PI*2); x.fill();
+  }
+  // Wilted
+  const c4 = document.getElementById('leg-wilted');
+  if(c4) { const x=c4.getContext('2d'); x.clearRect(0,0,20,20);
+    x.fillStyle='#5a4a3a';
+    for(let i=0;i<5;i++){
+      const a=(i/5)*Math.PI*2;
+      const px=10+Math.cos(a)*3.5, py=10+Math.sin(a)*3.5+1;
+      x.beginPath(); x.ellipse(px,py,2.5,2,a,0,Math.PI*2); x.fill();
+    }
+    x.strokeStyle='rgba(255,60,60,0.7)'; x.lineWidth=1.5;
+    const s=3;
+    x.beginPath(); x.moveTo(10-s,10-s); x.lineTo(10+s,10+s); x.stroke();
+    x.beginPath(); x.moveTo(10+s,10-s); x.lineTo(10-s,10+s); x.stroke();
+  }
+}
+
+// ===== DEADLOCK DETECTION =====
+function countWilted() {
+  let n = 0;
+  for(let c=0;c<COLS;c++) for(let r=0;r<ROWS;r++) {
+    if(grid[c][r] && grid[c][r].isWilted) n++;
+  }
+  return n;
+}
+
+function hasValidMoves() {
+  for(let c=0; c<COLS; c++) {
+    for(let r=0; r<ROWS; r++) {
+      const a = grid[c][r];
+      if(!a || a.isWilted || a.removing || a.webTimer > 0) continue;
+      // Try swap right
+      if(c < COLS-1) {
+        const b = grid[c+1][r];
+        if(b && !b.isWilted && !b.removing && b.webTimer <= 0) {
+          grid[c][r]=b; grid[c+1][r]=a;
+          b.col=c; a.col=c+1;
+          const ok = findMatches().length > 0;
+          grid[c][r]=a; grid[c+1][r]=b;
+          a.col=c; b.col=c+1;
+          if(ok) return true;
+        }
+      }
+      // Try swap down
+      if(r < ROWS-1) {
+        const b = grid[c][r+1];
+        if(b && !b.isWilted && !b.removing && b.webTimer <= 0) {
+          grid[c][r]=b; grid[c][r+1]=a;
+          b.row=r; a.row=r+1;
+          const ok = findMatches().length > 0;
+          grid[c][r]=a; grid[c][r+1]=b;
+          a.row=r; b.row=r+1;
+          if(ok) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function triggerRainbowClear() {
+  rainbowClearing = true;
+  // Clear 2 random rows with visible effect
+  const rows = [];
+  while(rows.length < 2) {
+    const r = Math.floor(Math.random()*ROWS);
+    if(!rows.includes(r)) rows.push(r);
+  }
+
+  // Flash the rows first
+  const flashOverlay = document.createElement('div');
+  flashOverlay.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:50;';
+  document.getElementById('game-container').appendChild(flashOverlay);
+
+  // Show popup immediately
+  const el = document.createElement('div');
+  el.className = 'score-popup';
+  el.style.animation = 'none';
+  el.innerHTML = '<span class="rainbow-text" style="font-size:24px;">🌈 Rainbow!！</span>';
+  el.style.left='50%';el.style.top='25%';el.style.transform='translateX(-50%)';
+  el.style.opacity='1';
+  document.getElementById('game-container').appendChild(el);
+
+  // Highlight rows with rainbow flash
+  for(const r of rows) {
+    for(let c=0;c<COLS;c++) {
+      const b = grid[c][r];
+      if(b) { b.scale = 1.3; }
+    }
+  }
+
+  // Delay before clearing
+  setTimeout(()=>{
+    let count = 0;
+    // Rainbow flash on target rows
+    for(const r of rows) {
+      const flash = document.createElement('div');
+      flash.className = 'rainbow-row-flash';
+      flash.style.top = (canvas.offsetTop + r*cellSize) + 'px';
+      flash.style.height = cellSize + 'px';
+      flash.style.width = canvas.width + 'px';
+      flash.style.left = canvas.offsetLeft + 'px';
+      document.getElementById('game-container').appendChild(flash);
+      setTimeout(()=>flash.remove(), 1100);
+    }
+    // Screen shake
+    canvas.classList.add('screen-shake');
+    setTimeout(()=>canvas.classList.remove('screen-shake'), 350);
+
+    for(const r of rows) {
+      for(let c=0;c<COLS;c++) {
+        if(grid[c][r]) {
+          spawnParticles(c, r, grid[c][r].type);
+          grid[c][r] = null;
+          count++;
+        }
+      }
+    }
+    el.innerHTML = '<span class="rainbow-text" style="font-size:24px;">🌈 ' + count + 'cleared！</span>';
+    playNote(523,0.15,0.15,'sine');playNote(659,0.15,0.12,'sine',80);
+    playNote(784,0.15,0.1,'sine',160);playNote(1047,0.2,0.12,'sine',240);
+    flashOverlay.remove();
+    setTimeout(()=>{ el.style.animation = 'float-up 1.5s ease-out forwards'; }, 300);
+    setTimeout(()=>el.remove(), 2500);
+    // Apply gravity and fill empty spaces
+    (async()=>{
+      await applyGravity();
+      await fillBoard();
+      await delay(200);
+      rainbowClearing = false;
+      await processMatches();
+    })();
+  }, 800);
+}
+
+// ===== START =====
+init();
+</script>
+</body>
+</html>
